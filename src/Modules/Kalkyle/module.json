@@ -1,0 +1,11 @@
+{
+    "name": "Kalkyle",
+    "alias": "kalkyle",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\Kalkyle\\Providers\\KalkyleServiceProvider"
+    ],
+    "files": []
+}
