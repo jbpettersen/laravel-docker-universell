@@ -3,18 +3,21 @@ services:
     build:
       context: ./docker/php
     container_name: laravel-app
+    restart: unless-stopped
     volumes:
       - ./src:/var/www/html
     working_dir: /var/www/html
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   nginx:
     build:
       context: ./docker/nginx
-    container_name: nginx
+    container_name: laravel-nginx
+    restart: unless-stopped
     ports:
-      - "8000:80"
+      - "${APP_PORT:-8000}:80"
     depends_on:
       - app
     volumes:
@@ -22,15 +25,23 @@ services:
 
   db:
     image: mysql:8.0
-    container_name: mysql-db
+    container_name: laravel-db
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: laravel
     ports:
-      - "3306:3306"
+      # 3307 på host for å ikke kollidere med en lokalt installert MySQL.
+      # Internt i nettverket er porten fortsatt 3306 (DB_HOST=db, DB_PORT=3306).
+      - "${DB_PORT:-3307}:3306"
     volumes:
       - dbdata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
 
 volumes:
   dbdata:
