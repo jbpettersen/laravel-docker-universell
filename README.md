@@ -4,19 +4,33 @@ Et lett skjelett for å komme raskt i gang med Laravel i Docker. Repoet innehold
 **kun konfigurasjon** — ingen applikasjonskode. Laravel installeres inn i `src/`
 første gang du starter, og `src/` er bevisst holdt utenfor versjonskontroll.
 
-| Tjeneste | Image / bygg      | Host          | Internt   |
-| -------- | ----------------- | ------------- | --------- |
-| `nginx`  | `nginx:stable-alpine` | `8000`    | `80`      |
-| `app`    | `php:8.2-fpm`     | –             | `9000`    |
-| `db`     | `mysql:8.0`       | `3307`        | `3306`    |
+| Tjeneste | Innhold | Host | Internt |
+| -------- | ------- | ---- | ------- |
+| `nginx`  | `nginx:stable-alpine` | `8000` | `80` |
+| `app`    | PHP 8.2-FPM, Composer, Node 22 + npm | – | `9000` |
+| `db`     | `mysql:8.0` | `3307` | `3306` |
+
+Alt bygges for vertens egen arkitektur — både `amd64` og `arm64` (Apple Silicon)
+kjører nativt, uten emulering.
 
 ## Kom i gang
 
 ```bash
 git clone https://github.com/jbpettersen/laravel-docker-universell.git minapp
 cd minapp
+```
+
+**På Linux**, kjør dette først, slik at filene containeren lager tilhører deg:
+
+```bash
+printf 'UID=%s\nGID=%s\n' "$(id -u)" "$(id -g)" >> .env
+```
+
+Så, på alle plattformer:
+
+```bash
 docker compose up -d --build
-docker compose exec app composer create-project laravel/laravel .
+docker compose exec -u www-data app composer create-project laravel/laravel .
 ```
 
 Appen ligger nå på **<http://localhost:8000>**.
@@ -47,8 +61,8 @@ utenfra, f.eks. fra TablePlus eller DBeaver på host-maskinen.
 **2.** Tøm config-cachen og kjør migrasjonene på nytt:
 
 ```bash
-docker compose exec app php artisan config:clear
-docker compose exec app php artisan migrate:fresh
+docker compose exec -u www-data app php artisan config:clear
+docker compose exec -u www-data app php artisan migrate:fresh
 ```
 
 **3.** Bekreft at tabellene havnet i MySQL:
@@ -66,25 +80,31 @@ Vil du beholde SQLite i stedet, kan `db`-tjenesten trygt fjernes fra
 docker compose up -d                                  # start
 docker compose down                                   # stopp
 docker compose logs -f app                            # følg logger
-docker compose exec app bash                          # shell i PHP-containeren
+docker compose exec -u www-data app bash              # shell i PHP-containeren
 
-docker compose exec app php artisan migrate
-docker compose exec app php artisan test
-docker compose exec app composer require <pakke>
+docker compose exec -u www-data app php artisan migrate
+docker compose exec -u www-data app php artisan test
+docker compose exec -u www-data app composer require <pakke>
 ```
+
+`-u www-data` gjør at filer som opprettes tilhører deg og ikke root. På macOS og
+Windows spiller det ingen rolle, men det er gratis å ha med, og på Linux er det
+forskjellen på et prosjekt du kan slette og ett som krever `sudo`.
 
 ### Frontend-assets
 
-Node er ikke med i PHP-imaget. Bygg assets på host-maskinen:
+Node og npm ligger i `app`-containeren, så du trenger ingen lokal
+Node-installasjon:
 
 ```bash
-cd src && npm install && npm run build     # eller: npm run dev
+docker compose exec -u www-data app npm install
+docker compose exec -u www-data app npm run build     # eller: npm run dev
 ```
 
 ## Porter i bruk?
 
-Host-portene kan overstyres uten å endre `docker-compose.yml` — lag en `.env`
-i repo-roten (ikke i `src/`):
+Host-portene kan overstyres uten å endre `docker-compose.yml` — legg dem i en
+`.env` i repo-roten (ikke i `src/`):
 
 ```ini
 APP_PORT=8080
@@ -94,6 +114,18 @@ DB_PORT=3310
 MySQL er lagt på **3307** fra start nettopp fordi 3306 ofte er opptatt av en
 lokalt installert MySQL.
 
+## Filrettigheter på Linux
+
+På macOS og Windows oversetter Docker Desktop eierskap gjennom VM-laget, så
+dette er et ikke-problem. På Linux slår bind mounts rått gjennom: uid-en inne i
+containeren blir uid-en på verten.
+
+Derfor bygges `app`-imaget med `UID`/`GID` som byggeargumenter, og `www-data`
+flyttes til de id-ene. Standardverdien er `1000`, som er første vanlige bruker på
+de fleste Linux-systemer — har du den, virker det uten konfigurasjon. Ellers
+legger du dine egne verdier i `.env` som vist under «Kom i gang», og bygger med
+`docker compose build`.
+
 ## Godt å vite
 
 - **`src/` er gitignorert.** Repoet skal forbli et rent skjelett. Skal appen din
@@ -101,13 +133,16 @@ lokalt installert MySQL.
   `src`-linjene fra `.gitignore` i din egen fork.
 - **`.env` blir aldri committet** — `.gitignore` blokkerer den, men beholder
   `.env.example`.
-- **PHP-FPM kjører som root**, så filer appen skriver får root-eierskap på
-  host-volumet. Greit lokalt; bytt til en ikke-privilegert bruker i
-  `docker/php/Dockerfile` før dette brukes noe annet sted enn på utviklermaskin.
+- **php-fpm sin master-prosess kjører som root**, slik den må for å kunne slippe
+  rettigheter ned til poolen. Selve poolen — og dermed alt appen skriver —
+  kjører som `www-data`. Før dette brukes andre steder enn på en
+  utviklermaskin, bør resten av imaget gås etter i sømmene.
 - **MySQL-passordet er `root`/`root`** og databasen heter `laravel`. Kun ment for
   lokal utvikling.
 - **Data overlever `docker compose down`** — MySQL lagrer i volumet `dbdata`.
   Vil du nullstille databasen helt: `docker compose down -v`.
+- **Windows:** bruk WSL2, og legg prosjektet inne i WSL2-filsystemet. Ligger det
+  under `/mnt/c/`, blir I/O merkbart tregere.
 
 ## PHP-utvidelser
 

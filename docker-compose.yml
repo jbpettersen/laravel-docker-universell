@@ -2,6 +2,10 @@ services:
   app:
     build:
       context: ./docker/php
+      args:
+        # Settes fra .env i repo-roten på Linux; se README.
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
     container_name: laravel-app
     restart: unless-stopped
     volumes:
