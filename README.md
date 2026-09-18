@@ -7,7 +7,7 @@ første gang du starter, og `src/` er bevisst holdt utenfor versjonskontroll.
 | Tjeneste | Innhold | Host | Internt |
 | -------- | ------- | ---- | ------- |
 | `nginx`  | `nginx:stable-alpine` | `8000` | `80` |
-| `app`    | PHP 8.2-FPM, Composer, Node 22 + npm | – | `9000` |
+| `app`    | PHP 8.4-FPM, Composer, Node 22 + npm | – | `9000` |
 | `db`     | `mysql:8.0` | `3307` | `3306` |
 
 Alt bygges for vertens egen arkitektur — både `amd64` og `arm64` (Apple Silicon)
